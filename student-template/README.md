@@ -80,6 +80,56 @@ pip install -r requirements.txt
 *Choose ONE language only.*
 
 ---
+1 Create Table--
+CREATE TABLE inventory (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_name VARCHAR(255) NOT NULL,
+    quantity INT NOT NULL DEFAULT 0,
+    reorder_level INT NOT NULL DEFAULT 0,
+    last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+2 Create API--
+from flask import Flask, jsonify
+@app.route("/api/inventory/alerts", methods=["GET"])
+def get_alerts():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, product_name, quantity, reorder_level
+        FROM inventory
+        WHERE quantity <= reorder_level
+        ORDER BY quantity ASC
+    """)
+
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    alerts = [
+        {
+            "id": str(row[0]),
+            "product_name": row[1],
+            "quantity": row[2],
+            "reorder_level": row[3]
+        }
+        for row in rows
+    ]
+
+    return jsonify(alerts), 200
+
+3. JSON File-- 
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "product_name": "Widget",
+    "quantity": 5,
+    "reorder_level": 10
+  }
+]
+
 
 ### QUESTION 2: Database – SQL + NoSQL
 
@@ -96,6 +146,25 @@ pip install -r requirements.txt
    - File: `database/queries.mongodb`
 
 ---
+1 SQL--
+SELECT
+    customer_id,
+    SUM(total_amount) AS total_order_value
+FROM orders
+WHERE order_date >= '2025-01-01'
+  AND order_date < '2026-01-01'
+GROUP BY customer_id
+ORDER BY total_order_value DESC
+LIMIT 5;
+
+2 MongoDB--
+db.order_audit.find({
+    order_id: "ORD-1001",
+    old_status: "PENDING",
+    new_status: "SHIPPED"
+})
+
+
 
 ### QUESTION 3: Frontend – React Dashboard Widget
 
@@ -109,6 +178,58 @@ pip install -r requirements.txt
 **File to Complete:** `frontend/Dashboard.jsx`
 
 ---
+import React, { useEffect, useState } from "react";
+
+function Dashboard() {
+  const [alerts, setAlerts] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/inventory/alerts")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch inventory alerts");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setAlerts(data);
+      })
+      .catch((error) => {
+        console.error("Error fetching inventory alerts:", error);
+      });
+  }, []);
+
+  return (
+    <div>
+      <h2>Inventory Alerts</h2>
+
+      {alerts.length === 0 ? (
+        <p>All inventory levels are healthy.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Product Name</th>
+              <th>Quantity</th>
+              <th>Reorder Level</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {alerts.map((item) => (
+              <tr key={item.id}>
+                <td>{item.product_name}</td>
+                <td>{item.quantity}</td>
+                <td>{item.reorder_level}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+export default Dashboard;
 
 ### QUESTION 4: CI/CD & GitHub Actions
 
@@ -122,6 +243,62 @@ pip install -r requirements.txt
 **File to Create/Edit:** `ci-cd/deploy.yml`
 
 ---
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  frontend:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build
+
+  backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend/python
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest
+
+      - name: Run tests
+        run: python -m pytest
 
 ### QUESTION 5: Prompt Engineering
 
@@ -139,6 +316,117 @@ pip install -r requirements.txt
 **File to Complete:** `prompt.txt`
 
 ---
+Create a production-ready React component named `SupplierPerformance` for an ERP dashboard.
+
+Component requirements:
+
+1. Component name
+- The component must be named `SupplierPerformance`.
+- Use a functional React component.
+- Use modern React with hooks where appropriate.
+- Export the component as the default export.
+
+2. Data source / API
+The component should fetch supplier performance data from:
+
+GET /api/suppliers/performance
+
+Expected API response:
+
+[
+  {
+    "supplier_id": "SUP-001",
+    "supplier_name": "ABC Supplies",
+    "on_time_delivery_percentage": 95.5,
+    "average_response_time_hours": 4.2
+  },
+  {
+    "supplier_id": "SUP-002",
+    "supplier_name": "XYZ Traders",
+    "on_time_delivery_percentage": 82.0,
+    "average_response_time_hours": 12.5
+  }
+]
+
+Also design the component so the data can optionally be supplied through a prop:
+
+<SupplierPerformance suppliers={suppliers} />
+
+Expected `suppliers` prop structure:
+
+[
+  {
+    supplier_id: string,
+    supplier_name: string,
+    on_time_delivery_percentage: number,
+    average_response_time_hours: number
+  }
+]
+
+If the `suppliers` prop is provided, use it instead of fetching from the API.
+
+3. UI layout
+Create a clean and responsive dashboard widget.
+
+Display suppliers in a table with these columns:
+
+- Supplier
+- On-Time Delivery
+- Avg. Response Time
+- Status
+
+Each supplier should appear as one table row.
+
+Format:
+- On-time delivery as a percentage, for example `95.5%`.
+- Response time in hours, for example `4.2 hrs`.
+
+Add a widget heading:
+"Supplier Performance"
+
+The table should be responsive and readable on desktop and mobile screens.
+
+4. Color-coded status logic
+
+Calculate the supplier status using both performance metrics.
+
+GREEN:
+- On-time delivery >= 90%
+- AND average response time <= 8 hours
+
+YELLOW:
+- On-time delivery >= 75%
+- AND average response time <= 24 hours
+- But the supplier does not meet the GREEN criteria.
+
+RED:
+- On-time delivery < 75%
+- OR average response time > 24 hours.
+
+Display the status using both text and color:
+- Green: `Good`
+- Yellow: `Needs Attention`
+- Red: `Poor`
+
+Use accessible colors and do not rely on color alone. Include the status text or an appropriate accessible label.
+
+5. Loading and error handling
+- Show a loading state while fetching data.
+- Show a clear error message if the API request fails.
+- Handle an empty supplier list gracefully with:
+  "No supplier performance data available."
+
+6. Technical requirements
+- Use `fetch()` for the API request.
+- Use `useEffect` and `useState` when fetching data.
+- Do not use external UI libraries unless necessary.
+- Keep the component self-contained and reusable.
+- Use semantic HTML.
+- Add reasonable CSS/classes for the dashboard card, table, status badges, loading state, and error state.
+- Avoid hardcoded supplier records in the component.
+- Handle invalid or missing numeric values gracefully.
+
+Return the complete React component code and any required CSS. The implementation should be clean, maintainable, accessible, and ready to integrate into an existing ERP dashboard.
 
 ## ✅ Submission Checklist
 
